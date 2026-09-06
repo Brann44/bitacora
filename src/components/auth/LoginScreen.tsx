@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Calendar, Lock, Mail, Eye, EyeOff, LogIn, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
+import { Calendar, Lock, Mail, Eye, EyeOff, LogIn, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export const LoginScreen: React.FC = () => {
@@ -26,12 +26,6 @@ export const LoginScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFillSuperAdmin = () => {
-    setEmail('brandon501eseuko@gmail.com');
-    setPassword('admin');
-    setErrorMessage(null);
   };
 
   return (
@@ -124,21 +118,12 @@ export const LoginScreen: React.FC = () => {
           </Button>
         </form>
 
-        {/* Acceso Rápido Super Admin (Solo informativo/asistencia) */}
+        {/* Acceso Protegido */}
         <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col items-center space-y-2 text-[11px] text-slate-400">
           <div className="flex items-center space-x-1.5 text-slate-400">
             <ShieldCheck size={13} className="text-indigo-400" />
             <span>Acceso protegido por roles y credenciales</span>
           </div>
-
-          <button
-            type="button"
-            onClick={handleQuickFillSuperAdmin}
-            className="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-1 transition-colors"
-          >
-            <Sparkles size={11} />
-            <span>Rellenar cuenta Super Admin (Brandon)</span>
-          </button>
         </div>
       </div>
 
