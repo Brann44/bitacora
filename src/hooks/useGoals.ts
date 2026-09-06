@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Goal } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export function useGoals(weekKey: string) {
+  const { user, viewingUserId } = useAuth();
+  const effectiveUserId =
+    (user?.role === 'superadmin' || user?.role === 'admin') && viewingUserId
+      ? viewingUserId
+      : user?.id || 'default_user';
+
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const localKey = `bitacora_goals_${weekKey}`;
+  const localKey = `bitacora_u_${effectiveUserId}_goals_${weekKey}`;
 
   const loadGoals = useCallback(async () => {
     setLoading(true);
@@ -17,6 +24,7 @@ export function useGoals(weekKey: string) {
           .from('goals')
           .select('*')
           .eq('week_key', weekKey)
+          .eq('user_id', effectiveUserId)
           .order('created_at', { ascending: true });
 
         if (data && !error) {
@@ -42,11 +50,11 @@ export function useGoals(weekKey: string) {
     } finally {
       setLoading(false);
     }
-  }, [weekKey, localKey]);
+  }, [weekKey, localKey, effectiveUserId]);
 
   useEffect(() => {
     loadGoals();
-  }, [loadGoals]);
+  }, [loadGoals, effectiveUserId]);
 
   const addGoal = async (title: string, category: string = 'General') => {
     if (!title.trim()) return;
@@ -67,6 +75,7 @@ export function useGoals(weekKey: string) {
     if (isSupabaseConfigured && supabase) {
       await supabase.from('goals').insert({
         id: newGoal.id,
+        user_id: effectiveUserId,
         week_key: newGoal.week_key,
         title: newGoal.title,
         completed: newGoal.completed,

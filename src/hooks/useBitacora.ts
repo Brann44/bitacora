@@ -47,7 +47,8 @@ export function useBitacora(initialWeekKey?: string) {
           .from('weeks')
           .select('*')
           .eq('week_key', key)
-          .single();
+          .eq('user_id', effectiveUserId)
+          .maybeSingle();
 
         const { data: actRecords } = await supabase
           .from('activities')
@@ -56,6 +57,7 @@ export function useBitacora(initialWeekKey?: string) {
             subtasks (*)
           `)
           .eq('week_key', key)
+          .eq('user_id', effectiveUserId)
           .order('order_index', { ascending: true });
 
         const forcedDates = (weekRecord?.forced_overtime_dates as string[]) || [];
@@ -135,13 +137,14 @@ export function useBitacora(initialWeekKey?: string) {
         await supabase
           .from('weeks')
           .upsert({
+            user_id: effectiveUserId,
             week_key: updated.key,
             year: parseInt(updated.key.split('-W')[0], 10),
             week_number: parseInt(updated.key.split('-W')[1], 10),
             forced_overtime_dates: updated.forcedOvertimeDates,
             notes: updated.notes || '',
             updated_at: new Date().toISOString(),
-          });
+          }, { onConflict: 'user_id,week_key' });
       } catch (e) {
         console.error('Error persistiendo en Supabase:', e);
       }
@@ -311,9 +314,14 @@ export function useBitacora(initialWeekKey?: string) {
     if (isSupabaseConfigured && supabase) {
       await supabase.from('activities').insert({
         id: newAct.id,
+        user_id: effectiveUserId,
         week_key: weekData.key,
         name: newAct.name,
+        description: newAct.description || '',
         category: newAct.category,
+        type: newAct.type,
+        branch: newAct.branch,
+        priority: newAct.priority,
         days: newAct.days,
         direct_hours: newAct.directHours,
         is_overtime: newAct.forcedOvertime,
@@ -354,9 +362,14 @@ export function useBitacora(initialWeekKey?: string) {
     if (isSupabaseConfigured && supabase) {
       await supabase.from('activities').insert({
         id: newAct.id,
+        user_id: effectiveUserId,
         week_key: weekData.key,
         name: newAct.name,
+        description: newAct.description,
         category: newAct.category,
+        type: newAct.type,
+        branch: newAct.branch,
+        priority: newAct.priority,
         days: newAct.days,
         direct_hours: newAct.directHours,
         is_overtime: newAct.forcedOvertime,
