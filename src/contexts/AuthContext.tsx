@@ -123,11 +123,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // Inicializar estado al cargar la app
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      const records = loadUsersFromStorage();
+      // Sincronizar usuarios con Supabase Cloud si está configurado
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: dbUsers } = await supabase.from('system_users').select('*');
+          if (dbUsers && dbUsers.length > 0) {
+            dbUsers.forEach((u: any) => {
+              const cleanEmail = String(u.email).trim().toLowerCase();
+              const match = records.find((r) => r.email.toLowerCase() === cleanEmail);
+              if (!match) {
+                records.push({
+                  id: u.id,
+                  name: u.name,
+                  email: cleanEmail,
+                  role: u.role,
+                  initialPassword: u.initial_password,
+                  passwordHash: u.password_hash,
+                  createdAt: u.created_at,
+                });
+              } else {
+                match.name = u.name;
+                match.role = u.role;
+                match.initialPassword = u.initial_password;
+                match.passwordHash = u.password_hash;
+              }
+            });
+            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(records));
+          } else if (records.length > 0) {
+            for (const r of records) {
+              await supabase.from('system_users').upsert({
+                id: r.id,
+                name: r.name,
+                email: r.email,
+                role: r.role,
+                initial_password: r.initialPassword,
+                password_hash: r.passwordHash,
+                created_at: r.createdAt,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Error sincronizando usuarios con Supabase:', err);
+        }
+      }
+
       setAllUsers(
         records.map((u) => ({
           id: u.id,
@@ -290,6 +329,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const updated = [...records, newRecord];
     saveUsersToStorage(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('system_users').insert({
+          id: newRecord.id,
+          name: newRecord.name,
+          email: newRecord.email,
+          role: newRecord.role,
+          initial_password: newRecord.initialPassword,
+          password_hash: newRecord.passwordHash,
+          created_at: newRecord.createdAt,
+        });
+      } catch (e) {
+        console.warn('Error guardando nuevo usuario en Supabase:', e);
+      }
+    }
+
     return { success: true };
   };
 
@@ -320,6 +376,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     records[index] = updatedRecord;
     saveUsersToStorage(records);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('system_users').update({
+          name: updatedRecord.name,
+          email: updatedRecord.email,
+          role: updatedRecord.role,
+          initial_password: updatedRecord.initialPassword,
+          password_hash: updatedRecord.passwordHash,
+        }).eq('id', userId);
+      } catch (e) {
+        console.warn('Error actualizando usuario en Supabase:', e);
+      }
+    }
 
     // Si se editó el usuario activo
     if (user?.id === userId) {
@@ -361,6 +431,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const updated = records.filter((u) => u.id !== userId);
     saveUsersToStorage(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('system_users').delete().eq('id', userId);
+      } catch (e) {
+        console.warn('Error eliminando usuario en Supabase:', e);
+      }
+    }
 
     // Limpiar datos locales asociados a este usuario
     try {
