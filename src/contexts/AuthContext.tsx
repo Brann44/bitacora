@@ -123,6 +123,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  // Inicializar estado al cargar la app
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      const records = loadUsersFromStorage();
+
       // Sincronizar usuarios con Supabase Cloud si está configurado
       if (isSupabaseConfigured && supabase) {
         try {
