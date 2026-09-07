@@ -3,8 +3,21 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { FileText, FileSpreadsheet, Send, CheckCircle2, AlertCircle, Mail, User, SendHorizontal } from 'lucide-react';
-import { WeekData, UserSettings } from '../types';
+import {
+  FileText,
+  FileSpreadsheet,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Mail,
+  User,
+  SendHorizontal,
+  SlidersHorizontal,
+  Clock,
+  Folder,
+  ListTree,
+} from 'lucide-react';
+import { WeekData, UserSettings, ReportColumnOptions } from '../types';
 import { generateWeeklyReportPdf } from '../lib/generatePdf';
 import { generateWeeklyReportExcel } from '../lib/generateExcel';
 import { generateReportHtmlEmail } from '../lib/emailTemplate';
@@ -28,6 +41,21 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const [recipientTo, setRecipientTo] = useState(settings.email || settings.gmail_user || '');
   const [recipientCc, setRecipientCc] = useState((settings.cc_emails || []).join(', '));
   const [recipientBcc, setRecipientBcc] = useState((settings.bcc_emails || []).join(', '));
+  
+  // Opciones de configuración de columnas del reporte
+  const [showHours, setShowHours] = useState(() => {
+    const saved = localStorage.getItem('bitacora_report_showHours');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showCategory, setShowCategory] = useState(() => {
+    const saved = localStorage.getItem('bitacora_report_showCategory');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showSubtasks, setShowSubtasks] = useState(() => {
+    const saved = localStorage.getItem('bitacora_report_showSubtasks');
+    return saved !== null ? saved === 'true' : true;
+  });
+
   const [sending, setSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [successDetails, setSuccessDetails] = useState<{ toCount: number; ccCount: number; bccCount: number } | null>(null);
@@ -71,12 +99,20 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
     email: reportEmail.trim() || settings.email,
   });
 
+  const getReportOptions = (): ReportColumnOptions => ({
+    showHours,
+    showCategory,
+    showSubtasks,
+    showOvertime: showHours,
+  });
+
   const handleDownloadPdf = () => {
     try {
       const effectiveSettings = getEffectiveSettings();
-      const doc = generateWeeklyReportPdf(weekData, effectiveSettings);
+      const options = getReportOptions();
+      const doc = generateWeeklyReportPdf(weekData, effectiveSettings, options);
       doc.save(`Bitacora_${weekData.key}.pdf`);
-      toast.success('PDF descargado con los datos especificados');
+      toast.success('PDF descargado con las columnas especificadas');
     } catch (e: any) {
       toast.error('Error generando PDF: ' + e.message);
     }
@@ -85,7 +121,8 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const handleDownloadExcel = async () => {
     try {
       const effectiveSettings = getEffectiveSettings();
-      const blob = await generateWeeklyReportExcel(weekData, effectiveSettings);
+      const options = getReportOptions();
+      const blob = await generateWeeklyReportExcel(weekData, effectiveSettings, options);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -94,7 +131,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      toast.success('Excel descargado con los datos especificados');
+      toast.success('Excel descargado con las columnas especificadas');
     } catch (e: any) {
       toast.error('Error generando Excel: ' + e.message);
     }
@@ -125,10 +162,11 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
 
     try {
       const effectiveSettings = getEffectiveSettings();
+      const options = getReportOptions();
 
-      const pdfDoc = generateWeeklyReportPdf(weekData, effectiveSettings);
+      const pdfDoc = generateWeeklyReportPdf(weekData, effectiveSettings, options);
       const pdfBase64 = pdfDoc.output('datauristring').split(',')[1];
-      const htmlBody = generateReportHtmlEmail(weekData, effectiveSettings);
+      const htmlBody = generateReportHtmlEmail(weekData, effectiveSettings, options);
 
       const response = await fetch('/api/send-report', {
         method: 'POST',
@@ -206,6 +244,97 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
               <span className="text-slate-400 block text-[10px] uppercase font-bold">Actividades</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">{weekData.activities.length} registradas</span>
             </div>
+          </div>
+        </div>
+
+        {/* Sección: Configuración de Columnas del Reporte */}
+        <div className="p-3.5 bg-slate-50/90 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <SlidersHorizontal size={14} className="text-indigo-600 dark:text-indigo-400" />
+              <span>Columnas y Elementos del Reporte:</span>
+            </h4>
+            <span className="text-[10px] text-slate-400 font-medium">Personaliza qué ver en PDF, Excel y Correo</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+            {/* Toggle Horas */}
+            <label
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                showHours
+                  ? 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 shadow-sm'
+                  : 'bg-slate-100/60 border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 text-slate-400 dark:text-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-2 pr-2">
+                <Clock size={14} className={showHours ? 'text-indigo-600 dark:text-indigo-400 shrink-0' : 'text-slate-400 shrink-0'} />
+                <div>
+                  <span className="font-semibold block text-[11px]">Columna de Horas</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">Total y cómputo de horas</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={showHours}
+                onChange={(e) => {
+                  setShowHours(e.target.checked);
+                  localStorage.setItem('bitacora_report_showHours', String(e.target.checked));
+                }}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer shrink-0"
+              />
+            </label>
+
+            {/* Toggle Categoría */}
+            <label
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                showCategory
+                  ? 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 shadow-sm'
+                  : 'bg-slate-100/60 border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 text-slate-400 dark:text-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-2 pr-2">
+                <Folder size={14} className={showCategory ? 'text-indigo-600 dark:text-indigo-400 shrink-0' : 'text-slate-400 shrink-0'} />
+                <div>
+                  <span className="font-semibold block text-[11px]">Columna Categoría</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">Soporte, Desarrollo, etc.</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={showCategory}
+                onChange={(e) => {
+                  setShowCategory(e.target.checked);
+                  localStorage.setItem('bitacora_report_showCategory', String(e.target.checked));
+                }}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer shrink-0"
+              />
+            </label>
+
+            {/* Toggle Sub-tareas */}
+            <label
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                showSubtasks
+                  ? 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 shadow-sm'
+                  : 'bg-slate-100/60 border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 text-slate-400 dark:text-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-2 pr-2">
+                <ListTree size={14} className={showSubtasks ? 'text-indigo-600 dark:text-indigo-400 shrink-0' : 'text-slate-400 shrink-0'} />
+                <div>
+                  <span className="font-semibold block text-[11px]">Detalle de Sub-tareas</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">Viñetas en la descripción</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={showSubtasks}
+                onChange={(e) => {
+                  setShowSubtasks(e.target.checked);
+                  localStorage.setItem('bitacora_report_showSubtasks', String(e.target.checked));
+                }}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer shrink-0"
+              />
+            </label>
           </div>
         </div>
 

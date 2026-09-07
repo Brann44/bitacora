@@ -232,6 +232,27 @@ export function useBitacora(initialWeekKey?: string) {
     }
   };
 
+  // Actualizar Categoría de Actividad
+  const updateActivityCategory = async (actId: string, category: string) => {
+    if (!weekData) return;
+    const updatedActivities = weekData.activities.map((act) => {
+      if (act.id === actId) {
+        return { ...act, category };
+      }
+      return act;
+    });
+
+    const updated = { ...weekData, activities: updatedActivities };
+    await persistWeek(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase
+        .from('activities')
+        .update({ category, updated_at: new Date().toISOString() })
+        .eq('id', actId);
+    }
+  };
+
   // Agregar Subtarea Manual
   const addManualSubtask = async (
     actId: string,
@@ -429,6 +450,7 @@ export function useBitacora(initialWeekKey?: string) {
     toggleForcedOvertimeDate,
     toggleActivityOvertime,
     updateActivityDirectHours,
+    updateActivityCategory,
     addManualSubtask,
     deleteSubtask,
     addQuickActivity,

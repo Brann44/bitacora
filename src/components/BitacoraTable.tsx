@@ -4,7 +4,21 @@ import { SubtaskAccordion } from './SubtaskAccordion';
 import { Badge } from './ui/Badge';
 import { Skeleton } from './ui/Skeleton';
 import { useToast } from './ui/Toast';
-import { Check, Clock, Trash2, GripVertical, Folder, Zap } from 'lucide-react';
+import { Check, Clock, Trash2, GripVertical, Folder, Zap, ChevronDown, Plus, Tag } from 'lucide-react';
+
+const PRESET_CATEGORIES = [
+  'Soporte',
+  'Soporte Técnico',
+  'Desarrollo',
+  'Mantenimiento',
+  'Infraestructura IT',
+  'Redes',
+  'Administrativa',
+  'Reunión / Capacitación',
+  'Proyecto',
+  'Calidad / QA',
+  'General',
+];
 
 interface BitacoraTableProps {
   weekData: WeekData | null;
@@ -13,6 +27,7 @@ interface BitacoraTableProps {
   onToggleForcedOvertimeDate: (date: string) => Promise<void>;
   onToggleActivityOvertime: (actId: string, currentValue: boolean) => Promise<void>;
   onUpdateActivityDirectHours: (actId: string, directHours: number) => Promise<void>;
+  onUpdateActivityCategory: (actId: string, category: string) => Promise<void>;
   onAddManualSubtask: (
     actId: string,
     desc: string,
@@ -34,6 +49,7 @@ export const BitacoraTable: React.FC<BitacoraTableProps> = ({
   onToggleForcedOvertimeDate,
   onToggleActivityOvertime,
   onUpdateActivityDirectHours,
+  onUpdateActivityCategory,
   onAddManualSubtask,
   onDeleteSubtask,
   onDeleteActivity,
@@ -43,6 +59,8 @@ export const BitacoraTable: React.FC<BitacoraTableProps> = ({
 }) => {
   const toast = useToast();
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+  const [openCategoryMenuId, setOpenCategoryMenuId] = useState<string | null>(null);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [directHoursDrafts, setDirectHoursDrafts] = useState<Record<string, string>>({});
@@ -238,12 +256,120 @@ export const BitacoraTable: React.FC<BitacoraTableProps> = ({
                               </strong>
 
                               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                                {/* Badge Categoría */}
-                                {act.category && act.category !== 'General' && (
-                                  <Badge variant="category" className="gap-1">
-                                    <Folder size={10} /> {act.category}
-                                  </Badge>
-                                )}
+                                {/* Selector Interactivo de Categoría */}
+                                <div className="relative inline-block">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (openCategoryMenuId === act.id) {
+                                        setOpenCategoryMenuId(null);
+                                      } else {
+                                        setOpenCategoryMenuId(act.id);
+                                        setCustomCategoryInput('');
+                                      }
+                                    }}
+                                    className="text-[11px] font-medium px-2 py-0.5 rounded-md border inline-flex items-center gap-1 transition-all bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 dark:border-indigo-800 shadow-sm cursor-pointer"
+                                    title="Clic para cambiar la categoría de esta actividad"
+                                  >
+                                    <Folder size={11} className="text-indigo-500 shrink-0" />
+                                    <span>{act.category || 'Soporte'}</span>
+                                    <ChevronDown size={10} className="opacity-70 ml-0.5" />
+                                  </button>
+
+                                  {/* Menú Flotante de Categorías */}
+                                  {openCategoryMenuId === act.id && (
+                                    <>
+                                      {/* Backdrop para cerrar al hacer clic fuera */}
+                                      <div
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => setOpenCategoryMenuId(null)}
+                                      />
+                                      <div className="absolute left-0 top-full mt-1.5 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                        <div className="px-2 py-1 mb-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            Seleccionar Categoría
+                                          </span>
+                                          <Tag size={12} className="text-slate-400" />
+                                        </div>
+
+                                        {/* Lista de Categorías Predefinidas */}
+                                        <div className="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                          {PRESET_CATEGORIES.map((cat) => {
+                                            const isCurrent = (act.category || 'Soporte') === cat;
+                                            return (
+                                              <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={async () => {
+                                                  setOpenCategoryMenuId(null);
+                                                  try {
+                                                    await onUpdateActivityCategory(act.id, cat);
+                                                    toast.success(`Categoría cambiada a: ${cat}`);
+                                                  } catch (err: any) {
+                                                    toast.error(`Error actualizando categoría: ${err.message}`);
+                                                  }
+                                                }}
+                                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                                                  isCurrent
+                                                    ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-950/60 dark:text-indigo-300'
+                                                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                                }`}
+                                              >
+                                                <span className="truncate">{cat}</span>
+                                                {isCurrent && <Check size={13} className="text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+
+                                        {/* Input para Categoría Personalizada */}
+                                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="text"
+                                              value={customCategoryInput}
+                                              onChange={(e) => setCustomCategoryInput(e.target.value)}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === 'Enter' && customCategoryInput.trim()) {
+                                                  e.preventDefault();
+                                                  const newCat = customCategoryInput.trim();
+                                                  setOpenCategoryMenuId(null);
+                                                  try {
+                                                    await onUpdateActivityCategory(act.id, newCat);
+                                                    toast.success(`Categoría cambiada a: ${newCat}`);
+                                                  } catch (err: any) {
+                                                    toast.error(`Error: ${err.message}`);
+                                                  }
+                                                }
+                                              }}
+                                              placeholder="Otra categoría..."
+                                              className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                                            />
+                                            <button
+                                              type="button"
+                                              disabled={!customCategoryInput.trim()}
+                                              onClick={async () => {
+                                                if (!customCategoryInput.trim()) return;
+                                                const newCat = customCategoryInput.trim();
+                                                setOpenCategoryMenuId(null);
+                                                try {
+                                                  await onUpdateActivityCategory(act.id, newCat);
+                                                  toast.success(`Categoría cambiada a: ${newCat}`);
+                                                } catch (err: any) {
+                                                  toast.error(`Error: ${err.message}`);
+                                                }
+                                              }}
+                                              className="p-1 rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700 transition-colors"
+                                              title="Guardar categoría personalizada"
+                                            >
+                                              <Plus size={13} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
 
                                 {/* Badge Interactivo de Sub-tareas */}
                                 <button

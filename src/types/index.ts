@@ -100,3 +100,10 @@ export interface AuthUser {
   initialPassword?: string; // Para que el admin pueda ver/copiar las credenciales que asignó
 }
 
+export interface ReportColumnOptions {
+  showHours: boolean;
+  showCategory: boolean;
+  showSubtasks: boolean;
+  showOvertime?: boolean;
+}
+

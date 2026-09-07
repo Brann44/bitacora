@@ -33,6 +33,7 @@ const MainDashboard: React.FC = () => {
     toggleForcedOvertimeDate,
     toggleActivityOvertime,
     updateActivityDirectHours,
+    updateActivityCategory,
     addManualSubtask,
     deleteSubtask,
     addQuickActivity,
@@ -100,6 +101,7 @@ const MainDashboard: React.FC = () => {
               onToggleForcedOvertimeDate={toggleForcedOvertimeDate}
               onToggleActivityOvertime={toggleActivityOvertime}
               onUpdateActivityDirectHours={updateActivityDirectHours}
+              onUpdateActivityCategory={updateActivityCategory}
               onAddManualSubtask={addManualSubtask}
               onDeleteSubtask={deleteSubtask}
               onDeleteActivity={deleteActivity}

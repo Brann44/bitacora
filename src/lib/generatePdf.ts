@@ -1,8 +1,16 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { WeekData, UserSettings } from '../types';
+import { WeekData, UserSettings, ReportColumnOptions } from '../types';
 
-export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettings): jsPDF {
+export function generateWeeklyReportPdf(
+  weekData: WeekData,
+  settings: UserSettings,
+  options?: Partial<ReportColumnOptions>
+): jsPDF {
+  const showHours = options?.showHours ?? true;
+  const showCategory = options?.showCategory ?? true;
+  const showSubtasks = options?.showSubtasks ?? true;
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -51,7 +59,7 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
   doc.setFont('helvetica', 'normal');
   doc.text(periodText, 148, startY);
 
-  // 3. Resumen de Horas
+  // 3. Resumen de Horas (Opcional según showHours)
   let totalHours = 0;
   let totalOvertimeHours = 0;
 
@@ -64,18 +72,24 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
     if (act.forcedOvertime) totalOvertimeHours += actHours;
   });
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Total Horas:', 130, startY + 5.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${totalHours.toFixed(2)} hrs`, 152, startY + 5.5);
+  if (showHours) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total Horas:', 130, startY + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${totalHours.toFixed(2)} hrs`, 152, startY + 5.5);
+  }
 
   // 4. Tabla de Actividades Principal
-  const tableHeaders = [
-    'Actividad / Tarea',
-    'Categoría',
-    ...weekData.dates.map((d) => d.shortLabel || d.label.substring(0, 3)),
-    'Horas',
-  ];
+  const tableHeaders: string[] = ['Actividad / Tarea'];
+  if (showCategory) {
+    tableHeaders.push('Categoría');
+  }
+  weekData.dates.forEach((d) => {
+    tableHeaders.push(d.shortLabel || d.label.substring(0, 3));
+  });
+  if (showHours) {
+    tableHeaders.push('Horas');
+  }
 
   const tableData = weekData.activities.map((act) => {
     let actHours = Number(act.directHours) || 0;
@@ -83,28 +97,54 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
       actHours += act.subtasks.reduce((sum, s) => sum + (Number(s.hours) || 0), 0);
     }
 
-    // Si está marcado enviamos 'CHECK', de lo contrario cadena vacía ''
     const dayChecks = weekData.dates.map((_, i) => (act.days && act.days[i] ? 'CHECK' : ''));
 
-    // Incluir subtareas formateadas
     let activityTitle = act.name;
-    if (act.subtasks && act.subtasks.length > 0) {
+    if (showSubtasks && act.subtasks && act.subtasks.length > 0) {
       const subtaskLines = act.subtasks
         .map((s) => {
           const timeRange = s.startTime && s.endTime ? ` [${s.startTime} - ${s.endTime}]` : '';
-          return `  • ${s.description} (${Number(s.hours || 0).toFixed(2)} hrs${timeRange})`;
+          const hoursInfo = showHours ? ` (${Number(s.hours || 0).toFixed(2)} hrs${timeRange})` : timeRange;
+          return `  • ${s.description}${hoursInfo}`;
         })
         .join('\n');
       activityTitle = `${act.name}\n${subtaskLines}`;
     }
 
-    return [
-      activityTitle,
-      act.category || 'General',
-      ...dayChecks,
-      `${actHours.toFixed(2)}h`,
-    ];
+    const row: string[] = [activityTitle];
+    if (showCategory) {
+      row.push(act.category || 'General');
+    }
+    row.push(...dayChecks);
+    if (showHours) {
+      row.push(`${actHours.toFixed(2)}h`);
+    }
+    return row;
   });
+
+  // Configurar ancho de columnas dinámicamente para total = 182mm
+  const categoryWidth = showCategory ? 26 : 0;
+  const hoursWidth = showHours ? 16 : 0;
+  const daysTotalWidth = weekData.dates.length * 14;
+  const activityWidth = Math.max(50, 182 - daysTotalWidth - categoryWidth - hoursWidth);
+
+  const columnStyles: Record<number, any> = {};
+  let colIdx = 0;
+  columnStyles[colIdx++] = { cellWidth: activityWidth, halign: 'left' };
+
+  if (showCategory) {
+    columnStyles[colIdx++] = { cellWidth: categoryWidth, halign: 'center' };
+  }
+
+  const dayStartCol = colIdx;
+  const dayEndCol = colIdx + weekData.dates.length - 1;
+  for (let i = 0; i < weekData.dates.length; i++) {
+    columnStyles[colIdx++] = { cellWidth: 14, halign: 'center' };
+  }
+
+  if (showHours) {
+    columnStyles[colIdx++] = { cellWidth: hoursWidth, halign: 'center', fontStyle: 'bold' };
+  }
 
   autoTable(doc, {
     startY: startY + 11,
@@ -124,31 +164,21 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
       textColor: [30, 41, 59],
       valign: 'middle',
     },
-    columnStyles: {
-      0: { cellWidth: 80, halign: 'left' },
-      1: { cellWidth: 26, halign: 'center' },
-      2: { cellWidth: 14, halign: 'center' },
-      3: { cellWidth: 14, halign: 'center' },
-      4: { cellWidth: 14, halign: 'center' },
-      5: { cellWidth: 14, halign: 'center' },
-      6: { cellWidth: 14, halign: 'center' },
-      7: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
-    },
+    columnStyles,
     didDrawCell: (data) => {
-      // Dibujar check verde vectorial en las columnas de días (índices 2 a 6)
-      if (data.section === 'body' && data.column.index >= 2 && data.column.index <= 6) {
+      if (data.section === 'body' && data.column.index >= dayStartCol && data.column.index <= dayEndCol) {
         if (data.cell.raw === 'CHECK') {
           const { x, y, width, height } = data.cell;
           const cx = x + width / 2;
           const cy = y + height / 2;
 
-          // 1. Badge contenedor verde suave
+          // Badge contenedor verde suave
           doc.setFillColor(236, 253, 245); // Emerald 50
           doc.setDrawColor(167, 243, 208); // Emerald 200
           doc.setLineWidth(0.2);
           doc.roundedRect(cx - 3, cy - 3, 6, 6, 1.2, 1.2, 'FD');
 
-          // 2. Trazo del checkmark verde esmeralda
+          // Trazo del checkmark verde esmeralda
           doc.setDrawColor(16, 185, 129); // Emerald 500
           doc.setLineWidth(0.65);
           doc.line(cx - 1.8, cy, cx - 0.4, cy + 1.4);
@@ -157,21 +187,22 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
       }
     },
     willDrawCell: (data) => {
-      // Ocultar texto 'CHECK' para que solo se vea el dibujo vectorial
-      if (data.section === 'body' && data.column.index >= 2 && data.column.index <= 6) {
+      if (data.section === 'body' && data.column.index >= dayStartCol && data.column.index <= dayEndCol) {
         if (data.cell.raw === 'CHECK') {
           data.cell.text = [];
         }
       }
     },
-    foot: [
-      [
-        'Total General',
-        '',
-        '', '', '', '', '',
-        `${totalHours.toFixed(2)}h`,
-      ],
-    ],
+    foot: showHours
+      ? [
+          [
+            'Total General',
+            ...(showCategory ? [''] : []),
+            ...weekData.dates.map(() => ''),
+            `${totalHours.toFixed(2)}h`,
+          ],
+        ]
+      : undefined,
     footStyles: {
       fillColor: [241, 245, 249],
       textColor: [15, 23, 42],
@@ -195,3 +226,4 @@ export function generateWeeklyReportPdf(weekData: WeekData, settings: UserSettin
 
   return doc;
 }
+

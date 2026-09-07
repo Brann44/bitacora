@@ -1,6 +1,14 @@
-import { WeekData, UserSettings } from '../types';
+import { WeekData, UserSettings, ReportColumnOptions } from '../types';
 
-export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettings): string {
+export function generateReportHtmlEmail(
+  weekData: WeekData,
+  settings: UserSettings,
+  options?: Partial<ReportColumnOptions>
+): string {
+  const showHours = options?.showHours ?? true;
+  const showCategory = options?.showCategory ?? true;
+  const showSubtasks = options?.showSubtasks ?? true;
+
   let totalHours = 0;
   let totalOvertimeHours = 0;
 
@@ -29,11 +37,30 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
         .join('');
 
       let subtaskHtml = '';
-      if (act.subtasks && act.subtasks.length > 0) {
+      if (showSubtasks && act.subtasks && act.subtasks.length > 0) {
+        const subItems = act.subtasks.map((s) => {
+          const timeRange = s.startTime && s.endTime ? ` [${s.startTime} - ${s.endTime}]` : '';
+          const hoursText = showHours ? ` (${Number(s.hours || 0).toFixed(2)} hrs${timeRange})` : timeRange;
+          return `• ${s.description}${hoursText}`;
+        });
         subtaskHtml = `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-          ${act.subtasks.map((s) => `• ${s.description} (${Number(s.hours || 0).toFixed(2)} hrs)`).join('<br>')}
+          ${subItems.join('<br>')}
         </div>`;
       }
+
+      const categoryCell = showCategory
+        ? `<td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569; text-align: center;">
+            <span style="background-color: #f1f5f9; padding: 3px 8px; border-radius: 9999px; font-weight: 500;">
+              ${act.category || 'General'}
+            </span>
+          </td>`
+        : '';
+
+      const hoursCell = showHours
+        ? `<td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; text-align: right; font-weight: 600;">
+            ${actHours.toFixed(2)}h
+          </td>`
+        : '';
 
       return `
         <tr>
@@ -41,19 +68,27 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
             ${act.name}
             ${subtaskHtml}
           </td>
-          <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569; text-align: center;">
-            <span style="background-color: #f1f5f9; padding: 3px 8px; border-radius: 9999px; font-weight: 500;">
-              ${act.category || 'General'}
-            </span>
-          </td>
+          ${categoryCell}
           ${dayCells}
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #0f172a; text-align: right; font-weight: 600;">
-            ${actHours.toFixed(2)}h
-          </td>
+          ${hoursCell}
         </tr>
       `;
     })
     .join('');
+
+  const metaRightColumn = showHours
+    ? `<td style="text-align: right;"><strong>Total Horas:</strong> ${totalHours.toFixed(2)} hrs</td>`
+    : `<td></td>`;
+
+  const metaRightBottom = showHours
+    ? `<td style="text-align: right; color: #64748b;"><strong>Horas Extra:</strong> ${totalOvertimeHours.toFixed(2)} hrs</td>`
+    : `<td></td>`;
+
+  const footerTotal = showHours
+    ? `<div class="total-box">
+        Total General Invertido: ${totalHours.toFixed(2)} horas
+      </div>`
+    : '';
 
   return `
     <!DOCTYPE html>
@@ -83,11 +118,11 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
           <table style="width: 100%; margin-bottom: 18px; font-size: 13px;">
             <tr>
               <td><strong>Responsable:</strong> ${settings.technician_name || 'No especificado'}</td>
-              <td style="text-align: right;"><strong>Total Horas:</strong> ${totalHours.toFixed(2)} hrs</td>
+              ${metaRightColumn}
             </tr>
             <tr>
               <td style="color: #64748b;"><strong>Correo:</strong> ${settings.email || 'No especificado'}</td>
-              <td style="text-align: right; color: #64748b;"><strong>Horas Extra:</strong> ${totalOvertimeHours.toFixed(2)} hrs</td>
+              ${metaRightBottom}
             </tr>
           </table>
 
@@ -95,9 +130,9 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
             <thead>
               <tr>
                 <th style="text-align: left; padding: 8px 12px;">Actividad</th>
-                <th>Cat</th>
+                ${showCategory ? '<th>Cat</th>' : ''}
                 ${weekData.dates.map((d) => `<th>${d.shortLabel}</th>`).join('')}
-                <th style="text-align: right; padding: 8px 12px;">Horas</th>
+                ${showHours ? '<th style="text-align: right; padding: 8px 12px;">Horas</th>' : ''}
               </tr>
             </thead>
             <tbody>
@@ -105,9 +140,7 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
             </tbody>
           </table>
 
-          <div class="total-box">
-            Total General Invertido: ${totalHours.toFixed(2)} horas
-          </div>
+          ${footerTotal}
         </div>
         <div class="footer">
           Enviado automáticamente desde Bitácora Semanal Pro.
@@ -117,3 +150,4 @@ export function generateReportHtmlEmail(weekData: WeekData, settings: UserSettin
     </html>
   `;
 }
+
